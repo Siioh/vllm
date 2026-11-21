@@ -400,6 +400,7 @@ def test_tiny_model_routed_experts(tmp_path, enable_pickle, looped):
         skip_tokenizer_init=True,
         tokenizer_mode="hf",
         gpu_memory_utilization=0.035,
+        max_num_batched_tokens=256,
         max_model_len=2048,
         max_num_seqs=4,
         enforce_eager=True,

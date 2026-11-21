@@ -342,6 +342,8 @@ def test_humming_experts_are_deterministic(fmt: str, tokens: int):
     )
     ids = torch.randint(0, num_global, (tokens, 8), device="cuda", dtype=torch.int32)
     ids = torch.where(ids < num_experts, ids, -1)
+    # Keep at least one local row whatever the GPU's RNG stream draws.
+    ids[0, 0] = 0
     rows = torch.arange(tokens * 8, device="cuda", dtype=torch.int32)
     src2dst = torch.where(ids.flatten() >= 0, rows, -1)
     weights = torch.rand(tokens * 8, device="cuda")
