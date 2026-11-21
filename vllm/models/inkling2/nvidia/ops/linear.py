@@ -8,6 +8,7 @@ import torch
 from vllm.platforms import current_platform
 from vllm.triton_utils import tl, triton
 from vllm.utils.flashinfer import is_flashinfer_autotuning
+from vllm.utils.mem_utils import get_max_shared_memory_bytes
 
 from . import gdc_launch_dependents, gdc_wait, use_pdl, use_sm100_kernels
 from .gemv import sm12x_bf16_gemv, use_sm12x_bf16_gemv
@@ -198,6 +199,10 @@ def _k_group_tma_kernel(
 # From this many rows, 128-row TMA tiles over all of K fill the GPU.
 TMA_MIN_TOKENS = 2048
 
+# Four pipeline stages of the largest tile need more shared memory than the
+# 99-101 KB per block of SM8.6, SM8.9 and SM12x.
+SMALL_SMEM_BYTES = 128 * 1024
+
 
 def k_group_partials(
     x: torch.Tensor,
@@ -242,7 +247,7 @@ def k_group_partials(
     split = groups > 1 and tokens < 4096
     num_warps = 4 if block_n <= 64 else 8
     num_stages = 4 if not split else 3 if block_n <= 64 else 2
-    if sm120:
+    if sm120 or get_max_shared_memory_bytes(x.device.index) < SMALL_SMEM_BYTES:
         num_stages = min(num_stages, 2)
     out = torch.empty(
         (groups if split else 1, tokens, n),
