@@ -9,6 +9,7 @@ import torch
 
 from vllm.triton_utils import tl, tldevice, triton
 
+from . import gdc_launch_dependents, gdc_wait, use_pdl
 from .block_scales import _scale_offsets
 from .linear import _k_group_tile, _prefetch_k_group_tile, k_group_partials
 from .mxfp8 import _mxfp8_block, _store_mxfp8_block
@@ -1069,9 +1070,9 @@ def _combine_kernel(
     PUSH: tl.constexpr,
     HALO_ROWS: tl.constexpr,
 ):
-    tl.extra.cuda.gdc_wait()
+    gdc_wait()
     if LAUNCH_DEPENDENTS:
-        tl.extra.cuda.gdc_launch_dependents()
+        gdc_launch_dependents()
     token = tl.program_id(0).to(tl.int64)
     cols = tl.program_id(1) * BLOCK + tl.arange(0, BLOCK)
     acc = tl.zeros((BLOCK,), tl.float32)
@@ -1142,5 +1143,5 @@ def _combine(
         sp is not None,
         HALO_ROWS,
         num_warps=2,
-        launch_pdl=True,
+        launch_pdl=use_pdl(),
     )

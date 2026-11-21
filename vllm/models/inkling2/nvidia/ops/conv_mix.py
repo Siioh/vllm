@@ -89,9 +89,12 @@ def conv_mix(
     )
     if sp is None:
         assert halo == 0 and positions.shape[0] == num_tokens and x.dim() == 2
-        if current_platform.is_device_capability_family(120):
+        if current_platform.is_device_capability_family(
+            120
+        ) or current_platform.is_device_capability_family(80):
             # Native conv/mix kernels require Hopper or SM10x. Keep the
-            # loop executor's cache writes and residual rounding on SM12x.
+            # loop executor's cache writes and residual rounding on SM12x
+            # and SM8x.
             short_conv(
                 x,
                 conv_weight,
