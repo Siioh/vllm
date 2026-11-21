@@ -20,11 +20,14 @@ from vllm.models.inkling2.configs import (
 from vllm.platforms import current_platform
 
 if not (
-    current_platform.is_device_capability_family(100)
+    current_platform.is_device_capability_family(80)
+    or current_platform.is_device_capability_family(100)
     or current_platform.is_device_capability(90)
     or current_platform.is_device_capability_family(120)
 ):
-    pytest.skip("Inkling2 requires Hopper or Blackwell", allow_module_level=True)
+    pytest.skip(
+        "Inkling2 requires Ampere, Hopper or Blackwell", allow_module_level=True
+    )
 
 TINY_CONFIG: dict[str, Any] = {
     "architectures": ["Inkling2ForConditionalGeneration"],

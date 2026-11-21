@@ -16,8 +16,12 @@ from vllm.platforms import current_platform
 
 _cap = current_platform.get_device_capability() if current_platform.is_cuda() else None
 requires_sm90 = pytest.mark.skipif(
-    _cap is None or _cap.major not in (9, 10, 11, 12),
-    reason="Inkling2 attention requires Hopper or Blackwell",
+    _cap is None or _cap.major not in (8, 9, 10, 11, 12),
+    reason="Inkling2 attention requires Ampere, Hopper or Blackwell",
+)
+requires_fp8e4nv = pytest.mark.skipif(
+    not current_platform.has_device_capability(89),
+    reason="8-bit KV cache needs fp8e4nv, which Triton and PTX provide from 8.9",
 )
 
 HEAD_DIM = 128
@@ -94,6 +98,7 @@ def _ref_attention(
 
 
 @requires_sm90
+@requires_fp8e4nv
 def test_e4m3_kv_load_preserves_all_byte_values_and_masks():
     from vllm.models.inkling2.nvidia.ops.attention_sm90 import _load_fp8_kv
     from vllm.triton_utils import tl, triton
@@ -116,7 +121,10 @@ def test_e4m3_kv_load_preserves_all_byte_values_and_masks():
 
 
 @requires_sm90
-@pytest.mark.parametrize("cache_dtype", [torch.float16, torch.float8_e4m3fn])
+@pytest.mark.parametrize(
+    "cache_dtype",
+    [torch.float16, pytest.param(torch.float8_e4m3fn, marks=requires_fp8e4nv)],
+)
 @pytest.mark.parametrize("query_len,splits", [(37, 1), (1, 1), (1, 3), (8, 1), (8, 3)])
 @pytest.mark.parametrize("window", [0, 1024])
 @torch.inference_mode()

@@ -10,11 +10,14 @@ import torch
 from vllm.platforms import current_platform
 
 if not (
-    current_platform.is_device_capability_family(100)
+    current_platform.is_device_capability_family(80)
+    or current_platform.is_device_capability_family(100)
     or current_platform.is_device_capability(90)
     or current_platform.is_device_capability_family(120)
 ):
-    pytest.skip("Inkling2 MoE requires Hopper or Blackwell", allow_module_level=True)
+    pytest.skip(
+        "Inkling2 MoE requires Ampere, Hopper or Blackwell", allow_module_level=True
+    )
 
 import vllm.models.inkling2.nvidia.moe as moe_module  # noqa: E402
 import vllm.models.inkling2.nvidia.ops.moe_sm120 as moe_sm120  # noqa: E402
@@ -303,7 +306,11 @@ def test_bmm_matches_dequantized_matmul(fmt: str, tile: int, n: int, k: int):
 
 
 @pytest.mark.skipif(
-    not current_platform.is_device_capability(90), reason="Humming experts (Hopper)"
+    not (
+        current_platform.is_device_capability_family(80)
+        or current_platform.is_device_capability(90)
+    ),
+    reason="Humming experts (Ampere or Hopper)",
 )
 @pytest.mark.parametrize("fmt", ["nvfp4", "mxfp8"])
 @pytest.mark.parametrize("tokens", [1, 32])
