@@ -52,9 +52,12 @@ def dequant_nvfp4(values: torch.Tensor, scales: torch.Tensor) -> torch.Tensor:
     return v.flatten(-2) * scales.float().repeat_interleave(16, -1)
 
 
-requires_fp8e4nv = pytest.mark.skipif(
-    not current_platform.has_device_capability(89),
-    reason="fp8e4nv activation quantization and fused routing (SM100/SM12x path)",
+requires_sm90_fp8_route = pytest.mark.skipif(
+    not current_platform.has_device_capability(90),
+    reason=(
+        "fp8e4nv activation quantization (Triton: 8.9+) and griddepcontrol "
+        "(PTX: 9.0+) in the fused routing path (SM100/SM12x serving)"
+    ),
 )
 
 
@@ -86,7 +89,7 @@ def random_mxfp8(*shape: int) -> tuple[torch.Tensor, torch.Tensor]:
     return values, scales.to(torch.uint8)
 
 
-@requires_fp8e4nv
+@requires_sm90_fp8_route
 def test_nvfp4_quantize_picks_better_of_four_and_six():
     """Each 16-block keeps whichever of the 6.0/4.0 scale candidates
     reconstructs it with the smaller absolute error (fouroversix_mae)."""
@@ -116,7 +119,7 @@ def test_nvfp4_quantize_picks_better_of_four_and_six():
         assert (error <= cand_error.abs().sum(-1) * (1 + 1e-6) + 1e-12).all()
 
 
-@requires_fp8e4nv
+@requires_sm90_fp8_route
 def test_mxfp8_quantize_rounds_scale_up_to_power_of_two():
     torch.manual_seed(0)
     x = (torch.randn(8, 512, device="cuda") * 5).bfloat16()
@@ -188,7 +191,7 @@ def _unswizzled_scales(scales: torch.Tensor, rows: torch.Tensor, tile: int):
     return scales.view(torch.uint8).flatten()[offsets]
 
 
-@requires_fp8e4nv
+@requires_sm90_fp8_route
 @pytest.mark.parametrize("fmt", ["nvfp4", "mxfp8"])
 @pytest.mark.parametrize("tile", [8, 128])
 @pytest.mark.parametrize("n", [1152, 2304])
@@ -364,7 +367,7 @@ def _torch_select_experts(logits, bias, topk, route_scale):
     return selected.softmax(-1) * route_scale, ids
 
 
-@requires_fp8e4nv
+@requires_sm90_fp8_route
 @pytest.mark.parametrize("tokens", [5, 12, 64, 200, 2100])
 def test_routing_matches_torch_and_breaks_ties_low(dist_init, tokens: int):
     """Covers the fused (few tokens), tl.topk and k-pass selections (and the
@@ -410,7 +413,7 @@ def test_select_experts_matches_torch(dist_init, tokens: int):
     )
 
 
-@requires_fp8e4nv
+@requires_sm90_fp8_route
 @pytest.mark.parametrize("tokens", [5, 200, 1100])
 def test_routing_is_deterministic(dist_init, tokens: int):
     """Rows are placed within their experts by atomics, so their order may
@@ -439,7 +442,7 @@ def test_routing_is_deterministic(dist_init, tokens: int):
         torch.testing.assert_close(a, b, atol=0, rtol=0)
 
 
-@requires_fp8e4nv
+@requires_sm90_fp8_route
 @pytest.mark.parametrize("fmt", ["nvfp4", "mxfp8"])
 @pytest.mark.parametrize("tokens", [5, 200, 2100])
 def test_routing_quantizes_tokens_into_their_rows(dist_init, fmt: str, tokens: int):
@@ -727,7 +730,7 @@ def test_moe_expert_parallel_matches_single_rank(
     torch.testing.assert_close(actual, expected, atol=4 * 2**-9 * scale, rtol=1e-2)
 
 
-@requires_fp8e4nv
+@requires_sm90_fp8_route
 @pytest.mark.parametrize("fmt", ["nvfp4", "mxfp8"])
 @pytest.mark.parametrize("tokens, padded", [(5, 8), (33, 48), (200, 256), (2100, 2304)])
 def test_padding_tokens_route_to_no_expert(
